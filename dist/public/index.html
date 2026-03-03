@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wake-on-LAN</title>
+  <script>
+    const _base = window.location.pathname.replace(/\/+$/, '');
+    document.write('<script src="' + _base + '/tailwind/tailwind.js"><\/script>');
+  </script>
+  <style>
+    @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .dot-pulse { animation: pulse-dot 1.2s ease-in-out infinite; }
+
+    /* CLS prevention — fixed-width columns so ping results never shift layout */
+    .col-status  { width: 5.5rem; flex-shrink: 0; }
+    .col-ports   { width: 4rem;   flex-shrink: 0; }
+    .col-actions { flex-shrink: 0; }
+
+    /* Undo toast progress bar */
+    @keyframes shrink { from { width: 100%; } to { width: 0%; } }
+    .undo-bar { animation: shrink 8s linear forwards; }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans antialiased">
+
+  <!-- Header -->
+  <header class="border-b border-zinc-800 bg-zinc-900 px-4 sm:px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <!-- bolt icon -->
+      <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" class="text-green-400 fill-current flex-shrink-0"><path d="m320-80 40-280H160l360-520h80l-40 320h240L400-80h-80Z"/></svg>
+      <span class="font-semibold text-sm tracking-wide">Wake-on-LAN</span>
+    </div>
+    <button onclick="refreshAll()"
+      class="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-100 transition-colors px-3 py-1.5 rounded border border-zinc-700 hover:border-zinc-500">
+      <!-- refresh icon -->
+      <svg xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 -960 960 960" width="14px" class="fill-current"><path d="M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690v-110h80v280H520v-80h168q-32-56-87.5-88T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h84q-28 106-114 173t-196 67Z"/></svg>
+      <span>Refresh all</span>
+    </button>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-4 py-6 sm:py-8 space-y-8">
+
+    <!-- Device list -->
+    <section>
+      <h2 class="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-3">Devices</h2>
+      <div id="device-list" class="space-y-2">
+        <div class="text-zinc-600 text-sm">Loading…</div>
+      </div>
+    </section>
+
+    <!-- Add device -->
+    <section>
+      <h2 class="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-3">Add Device</h2>
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 sm:p-5 space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs text-zinc-500 mb-1">Name</label>
+            <input id="f-name" type="text" placeholder="My PC" autocomplete="off"
+              class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none focus:border-green-500 transition-colors" />
+          </div>
+          <div>
+            <label class="block text-xs text-zinc-500 mb-1">IP Address <span class="text-zinc-600">(optional)</span></label>
+            <input id="f-ip" type="text" placeholder="192.168.1.10" autocomplete="off"
+              class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none focus:border-green-500 transition-colors" />
+          </div>
+          <div>
+            <label class="block text-xs text-zinc-500 mb-1">MAC Address</label>
+            <input id="f-mac" type="text" placeholder="AA:BB:CC:DD:EE:FF" autocomplete="off"
+              class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm font-mono placeholder-zinc-600 focus:outline-none focus:border-green-500 transition-colors" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs text-zinc-500 mb-1">WoL Port</label>
+            <input id="f-port" type="number" value="9" min="1" max="65535"
+              class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-green-500 transition-colors" />
+          </div>
+          <div>
+            <label class="block text-xs text-zinc-500 mb-1">Ping Port <span class="text-zinc-600">(optional)</span></label>
+            <input id="f-pingport" type="number" placeholder="e.g. 80, 22, 445" min="1" max="65535"
+              class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none focus:border-green-500 transition-colors" />
+          </div>
+          <div>
+            <label class="block text-xs text-zinc-500 mb-1">SecureOn <span class="text-zinc-600">(optional)</span></label>
+            <input id="f-password" type="text" placeholder="AABBCCDDEEFF" autocomplete="off"
+              class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm font-mono placeholder-zinc-600 focus:outline-none focus:border-green-500 transition-colors" />
+          </div>
+        </div>
+        <div>
+          <button onclick="addDevice()"
+            class="bg-green-500 hover:bg-green-400 active:bg-green-600 text-zinc-950 font-semibold text-sm px-4 py-2 rounded transition-colors">
+            Add Device
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Toast container -->
+  <div id="toasts"
+    class="fixed bottom-4 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-5 sm:bottom-5 flex flex-col gap-2 z-50 items-center sm:items-end pointer-events-none">
+  </div>
+
+<script>
+let devices = [];
+let status  = {};
+
+// Pending removals: index -> { device, statusSnap, timerId, toastEl }
+const pendingRemoval = {};
+
+function basePath() {
+  return window.location.pathname.replace(/\/$/, '');
+}
+
+// ── SVG icons ─────────────────────────────────────────────────────────────
+const SVG = {
+  send:    `<svg xmlns="http://www.w3.org/2000/svg" height="15px" viewBox="0 -960 960 960" width="15px" class="fill-current"><path d="M120-160v-640l760 320-760 320Zm80-120 474-200-474-200v140l240 60-240 60v140Zm0 0v-400 400Z"/></svg>`,
+  trash:   `<svg xmlns="http://www.w3.org/2000/svg" height="15px" viewBox="0 -960 960 960" width="15px" class="fill-current"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>`,
+  restore: `<svg xmlns="http://www.w3.org/2000/svg" height="15px" viewBox="0 -960 960 960" width="15px" class="fill-current"><path d="M440-320h80v-166l64 62 56-56-160-160-160 160 56 56 64-62v166ZM280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520Zm-400 0v520-520Z"/></svg>`,
+  ping:    `<svg xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 -960 960 960" width="14px" class="fill-current"><path d="M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690v-110h80v280H520v-80h168q-32-56-87.5-88T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h84q-28 106-114 173t-196 67Z"/></svg>`,
+};
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const colors = { ok:'border-green-500 text-green-400', err:'border-red-500 text-red-400', info:'border-zinc-600 text-zinc-300' };
+  const el = document.createElement('div');
+  el.className = `pointer-events-auto bg-zinc-900 border ${colors[type]} rounded px-4 py-2.5 text-sm shadow-lg whitespace-nowrap`;
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+  return el;
+}
+
+// ── Undo toast ─────────────────────────────────────────────────────────────
+function undoToast(msg, onUndo, timeoutMs = 8000) {
+  const el = document.createElement('div');
+  el.className = 'pointer-events-auto bg-zinc-900 border border-red-800 rounded shadow-lg text-sm overflow-hidden min-w-[220px]';
+  el.innerHTML = `
+    <div class="flex items-center justify-between gap-3 px-3 py-2.5">
+      <span class="text-zinc-300">${msg}</span>
+      <button class="flex items-center gap-1 text-xs font-semibold text-amber-400 hover:text-amber-300 transition-colors whitespace-nowrap">
+        ${SVG.restore} Undo
+      </button>
+    </div>
+    <div class="h-0.5 bg-zinc-800">
+      <div class="undo-bar h-full bg-red-600" style="animation-duration:${timeoutMs}ms"></div>
+    </div>`;
+  el.querySelector('button').addEventListener('click', () => { onUndo(); el.remove(); });
+  document.getElementById('toasts').appendChild(el);
+  return el;
+}
+
+// ── Load devices ───────────────────────────────────────────────────────────
+async function loadDevices() {
+  try {
+    const res  = await fetch(basePath() + '/api/devices');
+    const data = await res.json();
+    if (data.success) devices = data.devices || [];
+  } catch {
+    toast('Could not load devices from server', 'err');
+  }
+  render();
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function render() {
+  const el = document.getElementById('device-list');
+
+  if (!devices.length) {
+    el.innerHTML = `<div class="text-zinc-600 text-sm py-1">No devices yet. Add one below.</div>`;
+    return;
+  }
+
+  el.innerHTML = devices.map((d, i) => {
+    const s     = status[i];
+    const hasIp = d.ip && d.ip.trim() !== '';
+
+    // ── Status dot + label ────────────────────────────────────────────────
+    let dot, label;
+    if (!hasIp) {
+      dot   = `<span class="inline-block w-2 h-2 rounded-full bg-zinc-700 flex-shrink-0"></span>`;
+      label = `<span class="text-zinc-600 text-xs">no ip</span>`;
+    } else if (s?.checking) {
+      dot   = `<span class="inline-block w-2 h-2 rounded-full bg-yellow-400 dot-pulse flex-shrink-0"></span>`;
+      label = `<span class="text-yellow-400 text-xs">checking</span>`;
+    } else if (s?.error) {
+      dot   = `<span class="inline-block w-2 h-2 rounded-full bg-red-500 flex-shrink-0"></span>`;
+      label = `<span class="text-red-400 text-xs">error</span>`;
+    } else if (s) {
+      dot   = s.online
+        ? `<span class="inline-block w-2 h-2 rounded-full bg-green-400 flex-shrink-0"></span>`
+        : `<span class="inline-block w-2 h-2 rounded-full bg-zinc-600 flex-shrink-0"></span>`;
+      label = s.online
+        ? `<span class="text-green-400 text-xs font-medium">online</span>`
+        : `<span class="text-zinc-500 text-xs">offline</span>`;
+    } else {
+      dot   = `<span class="inline-block w-2 h-2 rounded-full bg-zinc-700 flex-shrink-0"></span>`;
+      label = `<span class="text-zinc-600 text-xs">—</span>`;
+    }
+
+    // ── Port badge (desktop only) ──────────────────────────────────────────
+    const portBadges = (s?.ports && s.ports.length)
+      ? s.ports.map(p =>
+          `<span class="text-xs font-mono px-1.5 py-0.5 rounded ${p.open ? 'bg-green-950 text-green-400' : 'bg-zinc-800 text-zinc-600'}">:${p.port}</span>`
+        ).join('')
+      : `<span class="invisible text-xs px-1.5 py-0.5">:000</span>`;
+
+    // ── Ping button — desktop only, only if device has IP ─────────────────
+    const pingBtn = hasIp
+      ? `<button id="ping-${i}" onclick="pingOne(${i})" title="Ping"
+           class="hidden sm:inline-flex items-center gap-1 text-xs border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-100 px-2.5 py-1.5 rounded transition-colors">
+           ${SVG.ping}<span>Ping</span>
+         </button>`
+      : `<span class="hidden sm:inline-block w-[62px]"></span>`;
+
+    // ── Device info: stacked on mobile, single line on desktop ────────────
+    const deviceInfo = `
+      <div class="font-medium text-sm truncate">${esc(d.name)}</div>
+      <div class="text-xs font-mono mt-0.5">
+        <div class="sm:hidden">
+          <div class="text-zinc-600 truncate">${normMac(d.mac)}</div>
+          ${hasIp ? `<div class="text-zinc-500 truncate">${esc(d.ip)}</div>` : ''}
+        </div>
+        <div class="hidden sm:block text-zinc-600 truncate">
+          ${normMac(d.mac)}${hasIp ? `<span class="text-zinc-500"> ${esc(d.ip)}</span>` : ''}
+        </div>
+      </div>`;
+
+    return `
+    <div class="bg-zinc-900 border border-zinc-800 rounded-lg px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3">
+      <div class="col-status flex items-center gap-1.5">${dot}${label}</div>
+      <div class="flex-1 min-w-0">${deviceInfo}</div>
+      <div class="col-ports hidden sm:flex items-center gap-1">${portBadges}</div>
+      <div class="col-actions flex items-center gap-1.5">
+        ${pingBtn}
+        <button id="wake-${i}" onclick="wakeOne(${i})"
+          class="inline-flex items-center gap-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 border border-zinc-700 text-zinc-100 font-medium px-2.5 py-1.5 rounded transition-colors">
+          ${SVG.send}<span>Wake</span>
+        </button>
+        <button onclick="removeDevice(${i})" title="Remove device"
+          class="inline-flex items-center justify-center w-[30px] h-[30px] rounded bg-red-900 hover:bg-red-700 active:bg-red-800 text-white transition-colors flex-shrink-0">
+          ${SVG.trash}
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Ping ───────────────────────────────────────────────────────────────────
+async function pingOne(i) {
+  const d = devices[i];
+  if (!d.ip || !d.ip.trim()) return;
+  status[i] = { checking: true };
+  render();
+  try {
+    const res  = await fetch(basePath() + '/api/ping', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip: d.ip, port: d.pingPort ? parseInt(d.pingPort) : null })
+    });
+    const data = await res.json();
+    status[i] = data.success ? { online: data.online, ports: data.ports, noPort: data.noPort } : { error: data.error };
+  } catch (e) { status[i] = { error: e.message }; }
+  render();
+}
+
+async function refreshAll() {
+  if (!devices.length) return;
+  await Promise.all(devices.map((d, i) => d.ip && d.ip.trim() ? pingOne(i) : null));
+}
+
+// ── Wake ───────────────────────────────────────────────────────────────────
+async function wakeOne(i) {
+  const d = devices[i];
+  const btn = document.getElementById(`wake-${i}`);
+  if (btn) { btn.disabled = true; btn.innerHTML = `${SVG.send}<span>…</span>`; }
+  try {
+    const res  = await fetch(basePath() + '/api/wake', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mac: d.mac, ip: d.ip || undefined, port: d.port || 9, password: d.password || undefined })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    toast(`Packet sent to ${d.name}`, 'ok');
+    if (btn) { btn.disabled = false; btn.innerHTML = `${SVG.send}<span>Sent</span>`; }
+    if (d.ip && d.ip.trim()) { setTimeout(() => pingOne(i), 5000); setTimeout(() => pingOne(i), 12000); }
+  } catch (e) {
+    toast(`Wake failed: ${e.message}`, 'err');
+    if (btn) { btn.disabled = false; btn.innerHTML = `${SVG.send}<span>Wake</span>`; }
+  }
+}
+
+// ── Remove device (soft-delete, 8 s undo) ──────────────────────────────────
+function removeDevice(i) {
+  const device     = devices[i];
+  const statusSnap = status[i];
+
+  // Optimistically remove locally and re-render
+  devices.splice(i, 1);
+  const ns = {};
+  Object.entries(status).forEach(([k, v]) => { const ki = +k; if (ki < i) ns[ki] = v; else if (ki > i) ns[ki - 1] = v; });
+  status = ns;
+  render();
+
+  const toastEl = undoToast(`Removed "${device.name}"`, () => {
+    clearTimeout(pendingRemoval[i]?.timerId);
+    delete pendingRemoval[i];
+    devices.splice(i, 0, device);
+    const rs = {};
+    Object.entries(status).forEach(([k, v]) => { const ki = +k; rs[ki >= i ? ki + 1 : ki] = v; });
+    rs[i] = statusSnap;
+    status = rs;
+    render();
+    toast(`Restored "${device.name}"`, 'ok');
+  });
+
+  const timerId = setTimeout(async () => {
+    delete pendingRemoval[i];
+    toastEl.remove();
+    try {
+      const res  = await fetch(basePath() + '/api/devices/' + i, { method: 'DELETE' });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      devices = data.devices;
+      status  = {};
+      render();
+    } catch (e) {
+      // Restore on server failure
+      devices.splice(i, 0, device);
+      const rs = {};
+      Object.entries(status).forEach(([k, v]) => { const ki = +k; rs[ki >= i ? ki + 1 : ki] = v; });
+      rs[i] = statusSnap;
+      status = rs;
+      render();
+      toast(`Failed to remove "${device.name}": ${e.message}`, 'err');
+    }
+  }, 8000);
+
+  pendingRemoval[i] = { device, statusSnap, timerId, toastEl };
+}
+
+// ── Add device ─────────────────────────────────────────────────────────────
+async function addDevice() {
+  const name     = document.getElementById('f-name').value.trim();
+  const ip       = document.getElementById('f-ip').value.trim();
+  const mac      = document.getElementById('f-mac').value.trim();
+  const port     = parseInt(document.getElementById('f-port').value)     || 9;
+  const pingPort = parseInt(document.getElementById('f-pingport').value)  || undefined;
+  const password = document.getElementById('f-password').value.trim()    || undefined;
+
+  if (!name || !mac) { toast('Name and MAC are required', 'err'); return; }
+  const clean = mac.replace(/[:\-]/g, '');
+  if (!/^[0-9A-Fa-f]{12}$/.test(clean)) { toast('Invalid MAC address', 'err'); return; }
+
+  try {
+    const res  = await fetch(basePath() + '/api/devices', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, ip, mac, port, pingPort, password })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    devices = data.devices;
+    status  = {};
+    ['f-name','f-ip','f-mac','f-pingport','f-password'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('f-port').value = '9';
+    render();
+    toast(`Added ${name}`, 'ok');
+  } catch (e) { toast(`Failed to add device: ${e.message}`, 'err'); }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function normMac(m) { return String(m||'').replace(/[:\-]/g,'').toUpperCase().replace(/(.{2})(?!$)/g,'$1:'); }
+
+// ── Init ───────────────────────────────────────────────────────────────────
+loadDevices().then(() => { if (devices.some(d => d.ip && d.ip.trim())) setTimeout(refreshAll, 400); });
+setInterval(() => { if (devices.length) refreshAll(); }, 30000);
+</script>
+</body>
+</html>
