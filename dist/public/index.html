@@ -295,6 +295,9 @@ async function wakeOne(i) {
 function removeDevice(i) {
   const device     = devices[i];
   const statusSnap = status[i];
+  // Capture the delete key NOW — before the splice shifts indices.
+  // Use UUID if the device has one (v1.3+), otherwise fall back to integer index.
+  const deleteKey  = device.id || String(i);
 
   // Optimistically remove locally and re-render
   devices.splice(i, 1);
@@ -319,7 +322,7 @@ function removeDevice(i) {
     delete pendingRemoval[i];
     toastEl.remove();
     try {
-      const res  = await fetch(basePath() + '/api/devices/' + i, { method: 'DELETE' });
+      const res  = await fetch(basePath() + '/api/devices/' + deleteKey, { method: 'DELETE' });
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
       devices = data.devices;
