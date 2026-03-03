@@ -1,12 +1,12 @@
 // HFS Wake-on-LAN Plugin
 // WoL core based on agnat/node_wake_on_lan
 
-exports.version = 1.4;
+exports.version = 1.5;
 exports.description = "Wake-on-LAN dashboard — wake and monitor network devices. Authenticated users only.";
 exports.apiRequired = 8.65;
 exports.author = "Feuerswut";
 exports.repo = "Feuerswut/hfs-wake-on-lan";
-exports.depend = [{ repo: 'Feuerswut/hfs-tailwind', version: 1000 }]
+exports.depend = [{ "repo": "Feuerswut/hfs-tailwind" }]
 
 exports.config = {
     basePath: {
