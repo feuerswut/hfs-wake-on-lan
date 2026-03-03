@@ -80,8 +80,6 @@ All endpoints are under the configured base path and require authentication.
 | `POST` | `/api/wake` | Send a magic packet |
 | `POST` | `/api/ping` | Ping a device (ICMP + optional TCP probe) |
 
----
-
 ## Changelog
 
 | Version | Changes |
