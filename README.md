@@ -2,14 +2,10 @@
 
 Wake and monitor network devices from your HFS server. Send magic packets, check online status via ICMP ping, and manage devices through a responsive mobile-first dashboard.
 
----
-
 ## Requirements
 
 - HFS 0.52.0+ (plugin API 8.65+)
 - The HFS process should have permission to run the `ping` system command
-
----
 
 ## Configuration
 
@@ -21,8 +17,6 @@ Open the plugin settings from the HFS admin panel.
 | Allowed Users | *(all authenticated)* | Restrict access to specific HFS usernames. Leave empty to allow all logged-in users |
 | Redirect URL | *(none)* | If set, unauthorized users are redirected here instead of receiving a 401/403 |
 | Devices | *(empty)* | Device list — also manageable directly from the dashboard |
-
----
 
 ## Adding Devices
 
@@ -39,8 +33,6 @@ Devices can be added from the dashboard's **Add Device** form or directly in the
 
 Devices are stored in the plugin config and persist across restarts. Adding or removing a device from the dashboard immediately updates the config.
 
----
-
 ## Online Detection
 
 Clicking **Ping** (or **Refresh all**) runs two checks in parallel:
@@ -49,8 +41,6 @@ Clicking **Ping** (or **Refresh all**) runs two checks in parallel:
 2. **TCP port probe** (optional) — if a Ping Port is configured, its open/closed state is shown as a badge next to the device. Either check being positive marks the device as online.
 
 > **Note:** Devices without an IP address cannot be pinged. The status column shows `no ip` instead of an online/offline state, and the Ping button is hidden.
-
----
 
 ## Dashboard
 
@@ -72,15 +62,11 @@ Deleting a device is non-destructive for 8 seconds. The device disappears from t
 
 All pingable devices are checked automatically every 30 seconds (or manually click refresh all if its stuck).
 
----
-
 ## Security
 
 - All API endpoints require authentication. Unauthenticated requests receive a `401` or `403` or are redirected.
 - The ICMP ping uses `spawn()` with `shell: false` and a strictly validated IP (regex + octet range check) — the IP is passed as a plain argument array and never interpolated into a shell string.
 - The `Ping Port` field is parsed as an integer before use; non-numeric input is rejected server-side.
-
----
 
 ## API
 
