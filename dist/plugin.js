@@ -1,11 +1,12 @@
 // HFS Wake-on-LAN Plugin
 // WoL core based on agnat/node_wake_on_lan
 
-exports.version = 1.3;
+exports.version = 1.4;
 exports.description = "Wake-on-LAN dashboard — wake and monitor network devices. Authenticated users only.";
 exports.apiRequired = 8.65;
 exports.author = "Feuerswut";
 exports.repo = "Feuerswut/hfs-wake-on-lan";
+exports.depend = [{ repo: 'Feuerswut/hfs-tailwind', version: 1000 }]
 
 exports.config = {
     basePath: {
@@ -324,6 +325,7 @@ function jsonErr(ctx, status, msg) { ctx.status = status; ctx.type = 'applicatio
 
 // ── Plugin init ───────────────────────────────────────────────────────────
 exports.init = async api => {
+
     const { getCurrentUsername } = api.require('./auth');
     _spawn = api.require('child_process').spawn;
     return { middleware };
@@ -341,6 +343,15 @@ exports.init = async api => {
         if (allowed.length > 0 && !allowed.includes(username)) return deny(ctx, api, 403, 'Access denied');
 
         const sub = url.slice(base.length);
+
+        // ── GET /api/tailwind.js ──────────────────────────────────────────
+        if (sub === '/api/tailwind.js') {
+            ctx.type = 'application/javascript';
+            ctx.set('Cache-Control', 'public, max-age=86400');
+            ctx.body = fs.createReadStream(api.customApiCall('tailwind')[0].path);
+            ctx.stop();
+            return;
+        }
 
         // ── GET /api/devices ──────────────────────────────────────────────
         if (sub === '/api/devices' && ctx.req.method === 'GET') {
