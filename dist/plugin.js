@@ -41,7 +41,8 @@ exports.config = {
             id: {
                 label: 'ID',
                 type: 'string',
-                $hide: true
+                $width: 0.6,
+                $hideUnder: '1500',
             },
             name: {
                 label: 'Name',
