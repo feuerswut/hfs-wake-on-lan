@@ -1,7 +1,7 @@
 // HFS Wake-on-LAN Plugin
 // WoL core based on agnat/node_wake_on_lan
 
-exports.version = 1.5;
+exports.version = 1.6;
 exports.description = "Wake-on-LAN dashboard — wake and monitor network devices. Authenticated users only.";
 exports.apiRequired = 8.65;
 exports.author = "Feuerswut";
@@ -94,6 +94,7 @@ exports.configDialog = {
 };
 
 exports.changelog = [
+    { version: 1.6, message: "Magic packets now sent to all relevant broadcast addresses (e.g. /24 = *.255) in parallel." },
     { version: 1.3, message: "IPv6 support, payload size cap, input validation" },
     { version: 1.2, message: "ICMP ping via OS ping command (primary); TCP port probe is secondary/optional badge" },
     { version: 1.1, message: "Add/remove devices via dashboard (persisted in plugin config); ping only shown when IP is set; online status fixed" },
@@ -130,6 +131,63 @@ function parseIP(raw) {
     const s = raw.trim();
     if (net.isIPv4(s) || net.isIPv6(s)) return s;
     return null;
+}
+
+// ── Broadcast address helpers ─────────────────────────────────────────────
+/**
+ * Given an IPv4 address string, return all broadcast addresses that should
+ * receive the magic packet.
+ *
+ * Strategy (all sent in parallel):
+ *  1. 255.255.255.255          — limited broadcast, always included
+ *  2. Classful directed broadcast — derived from the device IP using the
+ *     default classful mask (A/B/C).  Examples:
+ *       10.x.x.x   → 10.255.255.255   (Class A, mask /8)
+ *       172.x.x.x  → 172.y.255.255    (Class B, mask /16)
+ *       192.x.x.x  → 192.168.z.255    (Class C, mask /24)
+ *  3. Subnet .255 address      — last octet forced to 255, catches common
+ *     /24 subnets without requiring subnet-mask knowledge.
+ *     (Identical to the classful result for Class C, so de-duplicated.)
+ *
+ * Only unique addresses are returned; IPv6 addresses are passed through
+ * unchanged (WoL over IPv6 uses the all-nodes multicast, so we keep the
+ * address as-is and let the caller decide).
+ */
+function getBroadcastAddresses(ip) {
+    if (!ip || !net.isIPv4(ip)) {
+        // IPv6 or absent — return only the limited broadcast / original address.
+        return ip ? [ip] : ['255.255.255.255'];
+    }
+
+    const octets = ip.split('.').map(Number);
+    const [o1, o2, o3] = octets;
+
+    const addresses = new Set();
+
+    // 1. Limited broadcast — always
+    addresses.add('255.255.255.255');
+
+    // 2. Classful directed broadcast
+    //    Class A: first octet 1–126   → <o1>.255.255.255
+    //    Class B: first octet 128–191 → <o1>.<o2>.255.255
+    //    Class C: first octet 192–223 → <o1>.<o2>.<o3>.255
+    if (o1 >= 1 && o1 <= 126) {
+        // Class A
+        addresses.add(`${o1}.255.255.255`);
+    } else if (o1 >= 128 && o1 <= 191) {
+        // Class B
+        addresses.add(`${o1}.${o2}.255.255`);
+    } else if (o1 >= 192 && o1 <= 223) {
+        // Class C
+        addresses.add(`${o1}.${o2}.${o3}.255`);
+    }
+    // Class D/E (224+) — multicast/reserved, no directed broadcast.
+
+    // 3. Subnet .255 — covers typical /24 slices within larger networks.
+    //    (e.g. 10.1.2.x → 10.1.2.255, even though Class A broadcast is 10.255.255.255)
+    addresses.add(`${o1}.${o2}.${o3}.255`);
+
+    return [...addresses];
 }
 
 // ── WoL core (agnat/node_wake_on_lan) ────────────────────────────────────
@@ -197,6 +255,36 @@ function wake(mac, opts, callback) {
     }
 
     send();
+}
+
+/**
+ * Send magic packets to all broadcast addresses derived from the device IP
+ * (plus 255.255.255.255) in parallel.  Resolves when every send attempt has
+ * completed (errors per-address are collected but not fatal — at least one
+ * address must succeed, otherwise the returned promise rejects).
+ */
+function wakeAll(mac, opts) {
+    opts = opts || {};
+    const ip       = opts.address && opts.address !== '255.255.255.255' ? opts.address : null;
+    const targets  = getBroadcastAddresses(ip);
+
+    const sends = targets.map(addr =>
+        new Promise((resolve, reject) =>
+            wake(mac, { ...opts, address: addr }, err => err ? reject(err) : resolve(addr))
+        ).then(
+            addr  => ({ addr, ok: true }),
+            err   => ({ addr, ok: false, err: err.message })
+        )
+    );
+
+    return Promise.all(sends).then(results => {
+        const succeeded = results.filter(r => r.ok).map(r => r.addr);
+        const failed    = results.filter(r => !r.ok);
+        if (succeeded.length === 0) {
+            throw new Error('All broadcast targets failed: ' + failed.map(f => `${f.addr} (${f.err})`).join('; '));
+        }
+        return { succeeded, failed };
+    });
 }
 
 // ── ICMP ping via OS ping command ─────────────────────────────────────────
@@ -434,13 +522,20 @@ exports.init = async api => {
                 const { mac, ip, port, password } = await readBody(ctx.req);
                 if (!mac) return jsonErr(ctx, 400, 'mac is required');
 
-                const targetIp = (ip && parseIP(String(ip))) || '255.255.255.255';
+                const targetIp = (ip && parseIP(String(ip))) || null;
                 const wolPort  = (port && Number.isInteger(parseInt(port))) ? parseInt(port) : 9;
 
-                await new Promise((resolve, reject) =>
-                    wake(mac, { address: targetIp, port: wolPort, password }, err => err ? reject(err) : resolve())
-                );
-                return jsonOk(ctx, { success: true, message: `Magic packet sent to ${mac}` });
+                const { succeeded, failed } = await wakeAll(mac, {
+                    address:  targetIp || '255.255.255.255',
+                    port:     wolPort,
+                    password: password || undefined,
+                });
+
+                return jsonOk(ctx, {
+                    success:   true,
+                    message:   `Magic packet sent to ${mac}`,
+                    broadcast: { succeeded, failed: failed.map(f => ({ addr: f.addr, error: f.err })) },
+                });
             } catch (err) {
                 return jsonErr(ctx, 400, err.message);
             }
