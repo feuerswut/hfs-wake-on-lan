@@ -4,8 +4,8 @@
 exports.version = 1.6;
 exports.description = "Wake-on-LAN dashboard — wake and monitor network devices. Authenticated users only.";
 exports.apiRequired = 8.65;
-exports.author = "Feuerswut";
-exports.repo = "Feuerswut/hfs-wake-on-lan";
+exports.author = "feuerswut";
+exports.repo = "feuerswut/hfs-wake-on-lan";
 exports.depend = [{ "repo": "Feuerswut/hfs-tailwind" }]
 
 exports.config = {
