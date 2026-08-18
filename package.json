@@ -1,0 +1,8 @@
+{
+  "name": "hfs-wake-on-lan",
+  "private": true,
+  "description": "Wake-on-LAN dashboard for HFS -- wake and monitor network devices.",
+  "scripts": {
+    "test": "node test/integration.js"
+  }
+}

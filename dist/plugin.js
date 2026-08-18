@@ -1,17 +1,19 @@
 // HFS Wake-on-LAN Plugin
 // WoL core based on agnat/node_wake_on_lan
 
-exports.version = 1.6;
+exports.version = 1.7;
 exports.description = "Wake-on-LAN dashboard — wake and monitor network devices. Authenticated users only.";
-exports.apiRequired = 8.65;
+exports.apiRequired = 13;
 exports.author = "feuerswut";
 exports.repo = "feuerswut/hfs-wake-on-lan";
-exports.depend = [{ "repo": "Feuerswut/hfs-tailwind" }]
+exports.depend = [{ repo: "feuerswut/hfs-tailwind" }, { repo: "feuerswut/hfs-shared" }]
+
+const OLD_BASE_PATH = '/~/wake-on-lan';
 
 exports.config = {
     basePath: {
         type: 'string',
-        defaultValue: '/~/wake-on-lan',
+        defaultValue: '/~/plugins/hfs-wake-on-lan',
         label: 'Base Path',
         helperText: 'URL where the dashboard is served. API lives at <basePath>/api/...'
     },
@@ -22,10 +24,19 @@ exports.config = {
         helperText: 'HFS usernames allowed to access the panel. Empty = all authenticated users.',
         fields: {
             username: {
-                type: 'string',
+                type: 'username',
                 label: 'Username'
             }
         }
+    },
+    wol_enableLogging: {
+        type: 'boolean', label: 'Enable Logging', defaultValue: true,
+        helperText: 'Log wake requests and device add/remove.',
+    },
+    wol_verboseLogging: {
+        type: 'boolean', label: 'Verbose Logging', defaultValue: false,
+        helperText: 'Log every event immediately instead of batching.',
+        showIf: v => v.wol_enableLogging,
     },
     redirectUrl: {
         type: 'string',
@@ -94,6 +105,7 @@ exports.configDialog = {
 };
 
 exports.changelog = [
+    { version: 1.7, message: "Now requires hfs-shared. Default dashboard path moved to /~/plugins/hfs-wake-on-lan (old default path redirects to whatever basePath is currently configured). Wake/add/remove device events are now logged, batched, with an Enable/Verbose Logging switch." },
     { version: 1.6, message: "Magic packets now sent to all relevant broadcast addresses (e.g. /24 = *.255) in parallel." },
     { version: 1.3, message: "IPv6 support, payload size cap, input validation" },
     { version: 1.2, message: "ICMP ping via OS ping command (primary); TCP port probe is secondary/optional badge" },
@@ -416,11 +428,26 @@ exports.init = async api => {
 
     const { getCurrentUsername } = api.require('./auth');
     _spawn = api.require('child_process').spawn;
-    return { middleware };
+
+    const shared = api.customApiCall('hfsShared')[0];
+    shared.requireVersion('^1.0.0');
+    const rawLogger = shared.createLogger(api, { tag: 'hfs-wake-on-lan' });
+    function log(msg) {
+        if (!api.getConfig('wol_enableLogging')) return;
+        if (api.getConfig('wol_verboseLogging')) rawLogger.logNow(msg);
+        else rawLogger.log(msg);
+    }
+
+    return { unload() { rawLogger.unload(); }, middleware };
 
     async function middleware(ctx) {
-        const base = (api.getConfig('basePath') || '/~/wake-on-lan').replace(/\/+$/, '');
+        const base = (api.getConfig('basePath') || '/~/plugins/hfs-wake-on-lan').replace(/\/+$/, '');
         const url  = ctx.req.url.split('?')[0];
+
+        // Old default path (pre-hfs-shared retrofit) redirects to wherever
+        // basePath is currently configured, in case it was never customized.
+        if (base !== OLD_BASE_PATH && (url === OLD_BASE_PATH || url.startsWith(OLD_BASE_PATH + '/')))
+            return shared.response.redirect(ctx, url.replace(OLD_BASE_PATH, base));
 
         if (url !== base && !url.startsWith(base + '/')) return;
 
@@ -484,6 +511,7 @@ exports.init = async api => {
 
                 const devices = [...currentDevices, device];
                 await api.setConfig('devices', devices);
+                log(`device added: ${rawName} (${username})`);
                 return jsonOk(ctx, { success: true, devices });
             } catch (err) {
                 return jsonErr(ctx, 500, err.message);
@@ -508,8 +536,10 @@ exports.init = async api => {
                 }
 
                 if (idx === -1) return jsonErr(ctx, 404, 'Device not found');
+                const removed = devices[idx];
                 devices.splice(idx, 1);
                 await api.setConfig('devices', devices);
+                log(`device removed: ${removed.name || idParam} (${username})`);
                 return jsonOk(ctx, { success: true, devices });
             } catch (err) {
                 return jsonErr(ctx, 500, err.message);
@@ -531,6 +561,7 @@ exports.init = async api => {
                     password: password || undefined,
                 });
 
+                log(`wake ${mac} by ${username}: ${succeeded.length} succeeded, ${failed.length} failed`);
                 return jsonOk(ctx, {
                     success:   true,
                     message:   `Magic packet sent to ${mac}`,
