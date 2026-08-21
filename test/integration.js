@@ -17,11 +17,79 @@ function record(name, pass, reason) {
   console.log(`[${pass ? 'PASS' : 'FAIL'}] ${name}${reason ? ' -- ' + reason : ''}`);
 }
 
+// Reproduces hfs-shared's auth.gate()/servePublic()/canonicalPath() contract
+// closely enough to exercise this plugin's own routing -- hfs-shared isn't a
+// dependency of this repo's test suite, its own correctness is covered by
+// its own smoke test.
 function makeFakeHfsShared() {
+  function redirect(ctx, url, status) {
+    ctx.status = status || 302;
+    ctx.set('Location', url);
+    ctx.body = '';
+    ctx.stop();
+  }
+  function gate(ctx, api, opts) {
+    opts = opts || {};
+    const { getCurrentUsername } = api.require('./auth');
+    const username = getCurrentUsername(ctx);
+    function deny(status, message, reason) {
+      if (opts.redirectUrl) redirect(ctx, opts.redirectUrl);
+      else { ctx.status = status; ctx.type = 'application/json'; ctx.body = JSON.stringify({ error: message }); ctx.stop(); }
+      return { denied: true, reason };
+    }
+    if (!username) return opts.publicAccess ? null : deny(401, 'Authentication required', 'unauthenticated');
+    const rows = Array.isArray(opts.allowedUsers) ? opts.allowedUsers : [];
+    const allowed = rows.map(r => typeof r === 'string' ? r : (r && r.enabled !== false ? r.username : null)).filter(Boolean);
+    if (allowed.length && !allowed.includes(username)) return deny(403, 'Access denied', 'not-allowed');
+    return null;
+  }
+  function canonicalPath(api) { return `/~/plugins/${api.id}/`; }
+  function servePublic(ctx, api, opts) {
+    opts = opts || {};
+    const canonical = canonicalPath(api).replace(/\/+$/, '');
+    const subPath = String(opts.subPath || '').replace(/^\/+|\/+$/g, '');
+    const dashboardRoot = subPath ? `${canonical}/${subPath}` : canonical;
+
+    if (opts.pathAlias) {
+      const alias = String(opts.pathAlias).replace(/\/+$/, '');
+      if (alias && alias !== canonical && (ctx.path === alias || ctx.path.startsWith(alias + '/'))) {
+        redirect(ctx, canonical + ctx.path.slice(alias.length) + (ctx.querystring ? '?' + ctx.querystring : ''), 307);
+        return true;
+      }
+    }
+    if (ctx.path !== dashboardRoot && ctx.path !== `${dashboardRoot}/` && ctx.path !== `${dashboardRoot}/index.html`) return false;
+    if (ctx.path !== `${dashboardRoot}/`) {
+      redirect(ctx, `${dashboardRoot}/${ctx.querystring ? '?' + ctx.querystring : ''}`);
+      return true;
+    }
+    if (gate(ctx, api, { allowedUsers: opts.allowedUsers, publicAccess: opts.publicAccess, redirectUrl: opts.redirectUrl })) return true;
+    if (opts.useCustomFrontend) {
+      const customFile = path.join(api.storageDir, 'custom-frontend', 'index.html');
+      try {
+        if (fs.statSync(customFile).isFile()) {
+          ctx.type = 'text/html; charset=utf-8';
+          ctx.set('Cache-Control', 'no-cache');
+          ctx.body = fs.readFileSync(customFile, 'utf8');
+          ctx.stop();
+          return true;
+        }
+      } catch { /* fall through to the bundled file */ }
+    }
+    try {
+      ctx.type = 'text/html; charset=utf-8';
+      ctx.set('Cache-Control', 'no-cache');
+      ctx.body = fs.readFileSync(path.join(opts.distDir, 'public', 'index.html'), 'utf8');
+    } catch { ctx.status = 404; }
+    ctx.stop();
+    return true;
+  }
   return {
     requireVersion: () => true,
     createLogger: () => ({ log: () => {}, logNow: () => {}, unload: () => {} }),
-    response: { redirect(ctx, url) { ctx.status = 302; ctx._location = url; ctx.stop(); } },
+    response: { redirect },
+    auth: { gate },
+    canonicalPath,
+    servePublic,
   };
 }
 

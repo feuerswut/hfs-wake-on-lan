@@ -1,7 +1,7 @@
 // HFS Wake-on-LAN Plugin
 // WoL core based on agnat/node_wake_on_lan
 
-exports.version = 2.2;
+exports.version = 2.3;
 exports.description = "Wake-on-LAN dashboard — wake and monitor network devices. Authenticated users only.";
 exports.apiRequired = 13;
 exports.author = "feuerswut";
@@ -109,7 +109,7 @@ exports.configDialog = {
 };
 
 exports.changelog = [
-    { version: 2.2, message: "Fix canonical URL: index.html now redirects, doesn't serve directly." },
+    { version: 2.3, message: "Serving/auth now via hfs-shared's servePublic." },
 ];
 
 // ── Dependencies ──────────────────────────────────────────────────────────
@@ -119,7 +119,6 @@ const path   = require('path');
 const fs     = require('fs');
 const crypto = require('crypto');
 const { Buffer } = require('buffer');
-const { redirectAlias } = require('./backend/path-alias');
 
 const allocBuf = Buffer.alloc
     ? n => Buffer.alloc(n)
@@ -438,9 +437,6 @@ exports.init = async api => {
     const oldBasePath = api.getConfig('basePath')
     if (oldBasePath && !api.getConfig('pathAlias')) api.setConfig('pathAlias', oldBasePath)
 
-    // Where HFS publishes this plugin's public folder. Not configurable.
-    const CANONICAL = `/~/plugins/${api.id}`;
-
     const { getCurrentUsername } = api.require('./auth');
     _spawn = api.require('child_process').spawn;
 
@@ -453,23 +449,35 @@ exports.init = async api => {
         else rawLogger.log(msg);
     }
 
+    function authOpts() {
+        return {
+            allowedUsers: api.getConfig('allowedUsers'),
+            redirectUrl: api.getConfig('redirectUrl'),
+        };
+    }
+
     return { unload() { rawLogger.unload(); }, middleware };
 
     async function middleware(ctx) {
         const url = ctx.path;
+        const CANONICAL = shared.canonicalPath(api).slice(0, -1);
 
-        // A request on the alias never gets further than this.
-        if (redirectAlias(ctx, api, CANONICAL, url)) return;
+        // Legacy alias, dashboard-URL normalization, auth, and serving the
+        // bundled/custom-frontend index.html at the canonical root are all
+        // handled here -- see hfs-shared's servePublic.
+        if (shared.servePublic(ctx, api, {
+            ...authOpts(),
+            pathAlias: api.getConfig('pathAlias'),
+            useCustomFrontend: api.getConfig('useCustomFrontend'),
+            distDir: __dirname,
+        })) return;
 
         if (url !== CANONICAL && !url.startsWith(CANONICAL + '/')) return;
 
-        // ── Auth ──────────────────────────────────────────────────────────
-        // Runs before HFS's own public-folder serving, so it covers the page
-        // and its assets and not only the API.
+        // ── Auth for everything else in this namespace (the API) ──────────
+        const denied = shared.auth.gate(ctx, api, authOpts());
+        if (denied) return;
         const username = getCurrentUsername(ctx);
-        if (!username) return deny(ctx, api, 401, 'Authentication required');
-        const allowed = (api.getConfig('allowedUsers') || []).map(u => u.username).filter(Boolean);
-        if (allowed.length > 0 && !allowed.includes(username)) return deny(ctx, api, 403, 'Access denied');
 
         const sub = url.slice(CANONICAL.length);
 
@@ -606,50 +614,10 @@ exports.init = async api => {
 
         if (sub.startsWith('/api/')) return; // unknown API route, not ours to answer
 
-        // ── Dashboard files ───────────────────────────────────────────────
-        const rel = sub.replace(/^\/+/, '');
-
-        // Canonical page lives at the trailing-slash root. HFS's own
-        // automatic serving 405s on that exact path (no literal file is
-        // named ''), so it's served here explicitly; both the bare path and
-        // an explicit /index.html redirect there instead of serving content
-        // directly, so the page only ever "lives" at one canonical URL.
-        if (url === CANONICAL || url === `${CANONICAL}/index.html`) {
-            ctx.status = 302;
-            ctx.set('Location', `${CANONICAL}/${ctx.querystring ? '?' + ctx.querystring : ''}`);
-            ctx.body = '';
-            ctx.stop();
-            return;
-        }
-        if (url === `${CANONICAL}/`) {
-            if (serveCustomFrontend(ctx, api, 'index.html')) return;
-            try {
-                ctx.type = 'text/html; charset=utf-8';
-                ctx.body = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
-            } catch {
-                ctx.status = 404;
-            }
-            ctx.stop();
-            return;
-        }
-
-        // Any other asset under the folder: the override wins where it has a
-        // file; everything else is left to HFS, which serves this plugin's
-        // public folder on its own.
-        if (serveCustomFrontend(ctx, api, rel)) return;
+        // Any other asset under the folder (the dashboard root itself was
+        // already handled by servePublic above): the override wins where it
+        // has a file; everything else is left to HFS, which serves this
+        // plugin's public folder on its own.
+        if (serveCustomFrontend(ctx, api, sub.replace(/^\/+/, ''))) return;
     }
 };
-
-function deny(ctx, api, status, message) {
-    const redirect = api.getConfig('redirectUrl');
-    if (redirect) {
-        ctx.status = 302;
-        ctx.set('Location', redirect);
-        ctx.body = '';
-    } else {
-        ctx.status = status;
-        ctx.type   = 'application/json';
-        ctx.body   = JSON.stringify({ error: message });
-    }
-    ctx.stop();
-}
