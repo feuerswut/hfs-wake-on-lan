@@ -614,21 +614,36 @@ exports.init = async api => {
         if (sub.startsWith('/api/')) return; // unknown API route, not ours to answer
 
         // ── Dashboard files ───────────────────────────────────────────────
-        // The override wins where it has a file; everything else is left to
-        // HFS, which serves this plugin's public folder on its own.
         const rel = sub.replace(/^\/+/, '');
-        if (serveCustomFrontend(ctx, api, rel)) return;
 
-        // HFS answers a request for the folder itself with 405, since there is
-        // no file at that name, and it has no redirect that would add the
-        // trailing slash a relative <link href="wake.css"> needs. Naming the
-        // page explicitly settles both.
-        if (rel === '') {
+        // Canonical page lives at the trailing-slash root. HFS's own
+        // automatic serving 405s on that exact path (no literal file is
+        // named ''), so it's served here explicitly; both the bare path and
+        // an explicit /index.html redirect there instead of serving content
+        // directly, so the page only ever "lives" at one canonical URL.
+        if (url === CANONICAL || url === `${CANONICAL}/index.html`) {
             ctx.status = 302;
-            ctx.set('Location', CANONICAL + '/index.html' + (ctx.querystring ? '?' + ctx.querystring : ''));
+            ctx.set('Location', `${CANONICAL}/${ctx.querystring ? '?' + ctx.querystring : ''}`);
             ctx.body = '';
             ctx.stop();
+            return;
         }
+        if (url === `${CANONICAL}/`) {
+            if (serveCustomFrontend(ctx, api, 'index.html')) return;
+            try {
+                ctx.type = 'text/html; charset=utf-8';
+                ctx.body = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+            } catch {
+                ctx.status = 404;
+            }
+            ctx.stop();
+            return;
+        }
+
+        // Any other asset under the folder: the override wins where it has a
+        // file; everything else is left to HFS, which serves this plugin's
+        // public folder on its own.
+        if (serveCustomFrontend(ctx, api, rel)) return;
     }
 };
 

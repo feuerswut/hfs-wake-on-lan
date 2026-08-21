@@ -122,9 +122,23 @@ async function main() {
   {
     const ctx = makeCtx(CANONICAL, 'alice');
     await instance.middleware(ctx);
-    record('the folder itself redirects to index.html, so relative assets resolve',
-      ctx.status === 302 && ctx._location === CANONICAL + '/index.html',
+    record('the bare path redirects to the trailing-slash canonical URL',
+      ctx.status === 302 && ctx._location === CANONICAL + '/',
       `status=${ctx.status} location=${ctx._location}`);
+  }
+  {
+    const ctx = makeCtx(CANONICAL + '/index.html', 'alice');
+    await instance.middleware(ctx);
+    record('an explicit /index.html also redirects to the trailing-slash canonical URL, never serves there',
+      ctx.status === 302 && ctx._location === CANONICAL + '/',
+      `status=${ctx.status} location=${ctx._location}`);
+  }
+  {
+    const ctx = makeCtx(CANONICAL + '/', 'alice');
+    await instance.middleware(ctx);
+    record('the trailing-slash canonical URL serves the dashboard page directly',
+      ctx.status === 200 && ctx.type === 'text/html; charset=utf-8' && typeof ctx.body === 'string',
+      `status=${ctx.status} type=${ctx.type}`);
   }
   {
     const ctx = makeCtx(CANONICAL + '/wake.css', 'alice');
