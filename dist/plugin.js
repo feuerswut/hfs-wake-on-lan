@@ -1,7 +1,7 @@
 // HFS Wake-on-LAN Plugin
 // WoL core based on agnat/node_wake_on_lan
 
-exports.version = 2.1;
+exports.version = 2.2;
 exports.description = "Wake-on-LAN dashboard — wake and monitor network devices. Authenticated users only.";
 exports.apiRequired = 13;
 exports.author = "feuerswut";
@@ -109,14 +109,7 @@ exports.configDialog = {
 };
 
 exports.changelog = [
-    { version: 2.1, message: "The dashboard's body content -- device list, add-device form, buttons -- now carries Tailwind utility classes alongside its existing Sass ones, loaded through the /api/tailwind.js passthrough already in this file. The header stays pure Sass, untouched. Nothing about this is required: with the plugin providing that runtime not installed, the fetch 404s quietly and the page renders exactly as before on its own stylesheet." },
-    { version: 2.0, message: "Breaking: the Base Path setting is gone. The dashboard now always lives at the fixed URL HFS assigns to a plugin's public folder (/~/plugins/hfs-wake-on-lan/), and an optional Path alias redirects an older URL there — an existing Base Path is carried over into it automatically on first start. New 'Use custom frontend' option serves the dashboard from storage/custom-frontend instead of the shipped files. The dashboard itself was rebuilt from an inline-everything HTML page into TypeScript and Sass sources compiled into dist/public." },
-    { version: 1.7, message: "Now requires hfs-shared. Default dashboard path moved to /~/plugins/hfs-wake-on-lan (old default path redirects to whatever basePath is currently configured). Wake/add/remove device events are now logged, batched, with an Enable/Verbose Logging switch." },
-    { version: 1.6, message: "Magic packets now sent to all relevant broadcast addresses (e.g. /24 = *.255) in parallel." },
-    { version: 1.3, message: "IPv6 support, payload size cap, input validation" },
-    { version: 1.2, message: "ICMP ping via OS ping command (primary); TCP port probe is secondary/optional badge" },
-    { version: 1.1, message: "Add/remove devices via dashboard (persisted in plugin config); ping only shown when IP is set; online status fixed" },
-    { version: 1.0, message: "Initial release" }
+    { version: 2.2, message: "Fix canonical URL: index.html now redirects, doesn't serve directly." },
 ];
 
 // ── Dependencies ──────────────────────────────────────────────────────────
