@@ -7,16 +7,35 @@ Wake and monitor network devices from your HFS server. Send magic packets, check
 - HFS 0.52.0+ (plugin API 8.65+)
 - The HFS process should have permission to run the `ping` system command
 
+## Where the dashboard lives
+
+`/~/plugins/hfs-wake-on-lan/`, always. HFS publishes every plugin's public folder at that address and the plugin does not move it. Requesting the folder redirects to `index.html` inside it, which is what lets the page reference its stylesheet and script by bare filename.
+
 ## Configuration
 
 Open the plugin settings from the HFS admin panel.
 
 | Setting | Default | Description |
 |---|---|---|
-| Base Path | `/~/wake-on-lan` | URL where the dashboard is served |
+| Path alias (redirect) | `/~/wake-on-lan` | An older URL that should still reach the dashboard. Requests there get a `307` to the same spot under the real path, method and body intact. Leave empty for none |
+| Use custom frontend | off | Serve the dashboard from `storage/custom-frontend/` in the plugin folder instead of the shipped files. Any file missing there falls back to the shipped one |
 | Allowed Users | *(all authenticated)* | Restrict access to specific HFS usernames. Leave empty to allow all logged-in users |
 | Redirect URL | *(none)* | If set, unauthorized users are redirected here instead of receiving a 401/403 |
 | Devices | *(empty)* | Device list — also manageable directly from the dashboard |
+
+Upgrading from 1.x: the old **Base Path** setting is gone. Whatever it held is carried into **Path alias** on first start, so the URL that was in use keeps working as a redirect.
+
+## Building
+
+The dashboard is TypeScript and Sass under `src/`, compiled into `dist/public/` by `build/build.mjs`. `dist/plugin.js` and `dist/backend/` are hand-written and untouched by the build.
+
+```
+npm install
+npm run build        # one-shot
+npm run build:watch  # rebuild on change
+npm run typecheck
+npm test
+```
 
 ## Adding Devices
 
@@ -70,7 +89,7 @@ All pingable devices are checked automatically every 30 seconds (or manually cli
 
 ## API
 
-All endpoints are under the configured base path and require authentication.
+All endpoints sit under `/~/plugins/hfs-wake-on-lan` and require authentication.
 
 | Method | Path | Description |
 |---|---|---|
@@ -84,6 +103,7 @@ All endpoints are under the configured base path and require authentication.
 
 | Version | Changes |
 |---|---|
+| 2.0 | Base Path removed in favour of the fixed HFS-assigned path plus an optional alias redirect; custom-frontend override; dashboard rebuilt in TypeScript and Sass |
 | 1.2 | ICMP ping via OS `ping` command (primary); TCP port probe is optional badge |
 | 1.1 | Add/remove devices via dashboard (persisted in plugin config); ping hidden when no IP; online status fixed |
 | 1.0 | Initial release |

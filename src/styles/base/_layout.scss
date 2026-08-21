@@ -1,0 +1,52 @@
+// ---------------------------------------------------------------------------
+// base/_layout.scss -- the page itself: element defaults and the single
+// centred column everything sits in.
+// ---------------------------------------------------------------------------
+
+@use '../abstracts/mixins' as *;
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--sf-bg);
+    color: var(--sf-text);
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+svg { fill: currentcolor; flex-shrink: 0; }
+
+.page {
+    max-width: var(--wol-max-width);
+    margin: 0 auto;
+    padding: 1.5rem 1rem 3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+
+    @include narrow { padding: 1rem 0.75rem 2.5rem; }
+}
+
+.section-title {
+    margin: 0 0 0.75rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--sf-text-less);
+}
+
+.muted {
+    color: var(--sf-text-less);
+    font-size: 0.875rem;
+}
+
+.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}

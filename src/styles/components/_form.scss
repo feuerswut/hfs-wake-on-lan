@@ -1,0 +1,56 @@
+// ---------------------------------------------------------------------------
+// components/_form.scss -- the add-device panel.
+// ---------------------------------------------------------------------------
+
+@use '../abstracts/mixins' as *;
+
+.panel {
+    padding: 1.25rem;
+    border: 1px solid var(--sf-faint);
+    border-radius: var(--wol-radius);
+    background: var(--sf-bg-faint);
+
+    @include narrow { padding: 1rem; }
+}
+
+.field-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--wol-gap);
+    margin-bottom: var(--wol-gap);
+
+    @include narrow { grid-template-columns: minmax(0, 1fr); }
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.field label {
+    font-size: 0.75rem;
+    color: var(--sf-text-med);
+
+    .optional { color: var(--sf-text-less); }
+}
+
+.field input {
+    width: 100%;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--sf-input-border);
+    border-radius: 0.375rem;
+    background: var(--sf-input-bg);
+    color: var(--sf-text-hi);
+    font: inherit;
+    font-size: 0.875rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+
+    &::placeholder { color: var(--sf-text-less); }
+
+    &:focus {
+        outline: none;
+        border-color: var(--sf-focus);
+        box-shadow: 0 0 0 3px var(--sf-focus-ring);
+    }
+}

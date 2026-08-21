@@ -1,0 +1,11 @@
+// ---------------------------------------------------------------------------
+// abstracts/_mixins.scss -- the one breakpoint this page has.
+//
+// The device rows drop their ping button and their port badge below it, and
+// the add-device form goes from three columns to one. Everything else scales
+// on its own.
+// ---------------------------------------------------------------------------
+
+@mixin narrow {
+    @media (max-width: 640px) { @content; }
+}
