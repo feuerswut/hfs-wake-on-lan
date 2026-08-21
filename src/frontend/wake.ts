@@ -49,6 +49,25 @@ function $<T extends HTMLElement>(id: string): T {
     return el as T
 }
 
+// ── Optional Tailwind enhancement ───────────────────────────────────────────
+// The body content below the header carries Tailwind utility classes
+// alongside its Sass ones, but the page is fully usable on the Sass alone --
+// this is a progressive enhancement, not a dependency. It only takes effect
+// if /api/tailwind.js resolves, which the plugin's backend only does when
+// the plugin providing that runtime is installed; otherwise this 404s and
+// the class names above simply do nothing. Fire-and-forget: never blocks or
+// delays rendering the rest of the page.
+function loadTailwind() {
+    fetch(basePath() + '/api/tailwind.js')
+        .then(res => {
+            if (!res.ok) throw new Error(String(res.status))
+            const script = document.createElement('script')
+            script.src = basePath() + '/api/tailwind.js'
+            document.head.appendChild(script)
+        })
+        .catch(() => console.debug('Tailwind runtime not available; continuing with Sass only'))
+}
+
 // ── SVG icons ─────────────────────────────────────────────────────────────
 const SVG = {
     send:    `<svg xmlns="http://www.w3.org/2000/svg" height="14" width="14" viewBox="0 -960 960 960" aria-hidden="true"><path d="M120-160v-640l760 320-760 320Zm80-120 474-200-474-200v140l240 60-240 60v140Zm0 0v-400 400Z"/></svg>`,
@@ -71,9 +90,9 @@ function undoToast(msg: string, onUndo: () => void, timeoutMs = 8000) {
     const el = document.createElement('div')
     el.className = 'toast toast-undo'
     el.innerHTML = `
-    <div class="toast-undo-row">
+    <div class="toast-undo-row flex items-center gap-3">
       <span>${esc(msg)}</span>
-      <button type="button">${SVG.restore}<span>Undo</span></button>
+      <button type="button" class="rounded-md px-2 py-1 hover:bg-black/10">${SVG.restore}<span>Undo</span></button>
     </div>
     <div class="undo-bar" style="animation-duration:${timeoutMs}ms"></div>`
     el.querySelector('button')!.addEventListener('click', () => { onUndo(); el.remove() })
@@ -98,7 +117,7 @@ function render() {
     const el = $('device-list')
 
     if (!devices.length) {
-        el.innerHTML = `<div class="muted">No devices yet. Add one below.</div>`
+        el.innerHTML = `<div class="muted p-4">No devices yet. Add one below.</div>`
         return
     }
 
@@ -126,7 +145,7 @@ function render() {
             : `<span class="port-badge is-placeholder">:000</span>`
 
         const pingBtn = hasIp
-            ? `<button class="btn btn-ping btn-icon" data-action="ping" title="Ping">${SVG.ping}</button>`
+            ? `<button class="btn btn-ping btn-icon rounded-md hover:bg-black/5" data-action="ping" title="Ping">${SVG.ping}</button>`
             : ''
 
         const meta = hasIp
@@ -134,19 +153,19 @@ function render() {
             : normMac(d.mac)
 
         return `
-    <div class="device" data-index="${i}">
-      <div class="device-status">
+    <div class="device flex items-center gap-3 rounded-lg p-3" data-index="${i}">
+      <div class="device-status flex items-center gap-2">
         <span class="${dotClass}"></span><span class="${stateClass}">${label}</span>
       </div>
-      <div class="device-info">
+      <div class="device-info flex flex-col gap-0.5">
         <div class="device-name">${esc(d.name)}</div>
         <div class="device-meta mono">${meta}</div>
       </div>
-      <div class="device-ports">${portBadges}</div>
-      <div class="device-actions">
+      <div class="device-ports flex gap-1">${portBadges}</div>
+      <div class="device-actions flex items-center gap-2">
         ${pingBtn}
-        <button class="btn" data-action="wake">${SVG.send}<span>Wake</span></button>
-        <button class="btn btn-danger btn-icon" data-action="remove" title="Remove device">${SVG.trash}</button>
+        <button class="btn rounded-md px-3 py-1.5 hover:opacity-90" data-action="wake">${SVG.send}<span>Wake</span></button>
+        <button class="btn btn-danger btn-icon rounded-md hover:opacity-90" data-action="remove" title="Remove device">${SVG.trash}</button>
       </div>
     </div>`
     }).join('')
@@ -315,6 +334,8 @@ function init() {
         if (devices.some(d => d.ip && d.ip.trim())) setTimeout(refreshAll, 400)
     })
     setInterval(() => { if (devices.length) void refreshAll() }, 30000)
+
+    loadTailwind()
 }
 
 if (document.readyState === 'loading')

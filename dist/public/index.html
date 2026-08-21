@@ -22,53 +22,53 @@
     </button>
   </header>
 
-  <main class="page">
+  <main class="page flex flex-col gap-8">
 
-    <section>
+    <section class="flex flex-col gap-3">
       <h2 class="section-title">Devices</h2>
-      <div id="device-list" class="device-list">
+      <div id="device-list" class="device-list flex flex-col gap-2">
         <div class="muted">Loading…</div>
       </div>
     </section>
 
-    <section>
+    <section class="flex flex-col gap-3">
       <h2 class="section-title">Add device</h2>
-      <form id="add-form" class="panel" autocomplete="off">
-        <div class="field-grid">
-          <div class="field">
+      <form id="add-form" class="panel rounded-lg p-4" autocomplete="off">
+        <div class="field-grid grid gap-3">
+          <div class="field flex flex-col gap-1">
             <label for="f-name">Name</label>
             <input id="f-name" type="text" placeholder="My PC" />
           </div>
-          <div class="field">
+          <div class="field flex flex-col gap-1">
             <label for="f-ip">IP address <span class="optional">(optional)</span></label>
             <input id="f-ip" type="text" placeholder="192.168.1.10" />
           </div>
-          <div class="field">
+          <div class="field flex flex-col gap-1">
             <label for="f-mac">MAC address</label>
             <input id="f-mac" class="mono" type="text" placeholder="AA:BB:CC:DD:EE:FF" />
           </div>
         </div>
-        <div class="field-grid">
-          <div class="field">
+        <div class="field-grid grid gap-3">
+          <div class="field flex flex-col gap-1">
             <label for="f-port">WoL port</label>
             <input id="f-port" type="number" value="9" min="1" max="65535" />
           </div>
-          <div class="field">
+          <div class="field flex flex-col gap-1">
             <label for="f-pingport">Ping port <span class="optional">(optional)</span></label>
             <input id="f-pingport" type="number" placeholder="e.g. 80, 22, 445" min="1" max="65535" />
           </div>
-          <div class="field">
+          <div class="field flex flex-col gap-1">
             <label for="f-password">SecureOn <span class="optional">(optional)</span></label>
             <input id="f-password" class="mono" type="text" placeholder="AABBCCDDEEFF" />
           </div>
         </div>
-        <button type="submit" class="btn btn-primary">Add device</button>
+        <button type="submit" class="btn btn-primary rounded-md px-4 py-2 hover:opacity-90">Add device</button>
       </form>
     </section>
 
   </main>
 
-  <div id="toasts" class="toast-stack"></div>
+  <div id="toasts" class="toast-stack flex flex-col gap-2"></div>
 
   <script src="wake.js"></script>
 </body>
