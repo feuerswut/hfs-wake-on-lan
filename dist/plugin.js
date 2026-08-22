@@ -1,21 +1,25 @@
 // HFS Wake-on-LAN Plugin
 // WoL core based on agnat/node_wake_on_lan
 
-exports.version = 1.7;
+exports.version = 2.3;
 exports.description = "Wake-on-LAN dashboard — wake and monitor network devices. Authenticated users only.";
 exports.apiRequired = 13;
 exports.author = "feuerswut";
 exports.repo = "feuerswut/hfs-wake-on-lan";
-exports.depend = [{ repo: "feuerswut/hfs-tailwind" }, { repo: "feuerswut/hfs-shared" }]
-
-const OLD_BASE_PATH = '/~/wake-on-lan';
+exports.depend = [{ repo: "feuerswut/hfs-shared" }]
 
 exports.config = {
-    basePath: {
+    pathAlias: {
         type: 'string',
-        defaultValue: '/~/plugins/hfs-wake-on-lan',
-        label: 'Base Path',
-        helperText: 'URL where the dashboard is served. API lives at <basePath>/api/...'
+        defaultValue: '/~/wake-on-lan',
+        label: 'Path alias (redirect)',
+        helperText: 'Old URL that should redirect here. Leave empty for none.'
+    },
+    useCustomFrontend: {
+        type: 'boolean',
+        defaultValue: false,
+        label: 'Use custom frontend',
+        helperText: "Serve dashboard files from this plugin's storage/custom-frontend folder instead of the built-in ones."
     },
     allowedUsers: {
         type: 'array',
@@ -105,12 +109,7 @@ exports.configDialog = {
 };
 
 exports.changelog = [
-    { version: 1.7, message: "Now requires hfs-shared. Default dashboard path moved to /~/plugins/hfs-wake-on-lan (old default path redirects to whatever basePath is currently configured). Wake/add/remove device events are now logged, batched, with an Enable/Verbose Logging switch." },
-    { version: 1.6, message: "Magic packets now sent to all relevant broadcast addresses (e.g. /24 = *.255) in parallel." },
-    { version: 1.3, message: "IPv6 support, payload size cap, input validation" },
-    { version: 1.2, message: "ICMP ping via OS ping command (primary); TCP port probe is secondary/optional badge" },
-    { version: 1.1, message: "Add/remove devices via dashboard (persisted in plugin config); ping only shown when IP is set; online status fixed" },
-    { version: 1.0, message: "Initial release" }
+    { version: 2.3, message: "Serving/auth now via hfs-shared's servePublic." },
 ];
 
 // ── Dependencies ──────────────────────────────────────────────────────────
@@ -375,35 +374,42 @@ async function pingDevice(ip, customPort) {
     return { online, ports };
 }
 
-// ── Static file helper ────────────────────────────────────────────────────
-function serveStatic(ctx, filePath) {
-    try {
-        const full     = filePath || path.join(__dirname, 'public', 'index.html');
-        const resolved = path.resolve(full);
+// ── Custom-frontend override ──────────────────────────────────────────────
+// The shipped dashboard needs no code here: HFS serves a plugin's public
+// folder by itself. This only covers the opt-in replacement living in the
+// plugin's storage folder, and only for files that are actually there —
+// anything missing falls through to the shipped copy.
+const MIME_TYPES = {
+    '.html': 'text/html; charset=utf-8', '.css':  'text/css; charset=utf-8',
+    '.js':   'application/javascript',   '.json': 'application/json',
+    '.svg':  'image/svg+xml',            '.png':  'image/png',
+    '.jpg':  'image/jpeg',               '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp',               '.ico':  'image/x-icon',
+    '.woff2': 'font/woff2',              '.woff': 'font/woff',
+};
 
-        // Prevent directory traversal — resolved path must stay inside plugin dir
-        if (!resolved.startsWith(path.resolve(__dirname) + path.sep) &&
-             resolved !== path.resolve(__dirname)) {
-            ctx.status = 403; ctx.type = 'text/plain'; ctx.body = 'Forbidden'; ctx.stop(); return;
-        }
+/**
+ * Serve <storageDir>/custom-frontend/<rel> if it exists.
+ * @returns {boolean} true when the file was sent, false to fall through.
+ */
+function serveCustomFrontend(ctx, api, rel) {
+    if (!api.getConfig('useCustomFrontend')) return false;
 
-        if (!fs.existsSync(resolved)) {
-            ctx.status = 404; ctx.type = 'text/plain'; ctx.body = 'Not found'; ctx.stop(); return;
-        }
+    const root = path.resolve(api.storageDir, 'custom-frontend');
+    const resolved = path.resolve(root, rel || 'index.html');
+    // Keep '..' in a request from reaching outside the override folder.
+    if (resolved !== root && !resolved.startsWith(root + path.sep)) return false;
 
-        const types = {
-            '.html': 'text/html; charset=utf-8', '.css': 'text/css',
-            '.js':   'application/javascript',   '.json': 'application/json',
-            '.png':  'image/png',                 '.svg':  'image/svg+xml',
-            '.jpg':  'image/jpeg',                '.jpeg': 'image/jpeg',
-        };
-        ctx.type = types[path.extname(resolved)] || 'text/plain';
-        ctx.set('Cache-Control', 'no-cache');
-        ctx.body = ctx.type.startsWith('image/') ? fs.createReadStream(resolved) : fs.readFileSync(resolved, 'utf8');
-        ctx.stop();
-    } catch (err) {
-        ctx.status = 500; ctx.type = 'text/plain'; ctx.body = 'Error: ' + err.message; ctx.stop();
-    }
+    let stats;
+    try { stats = fs.statSync(resolved); } catch { return false; }
+    if (!stats.isFile()) return false;
+
+    ctx.status = 200;
+    ctx.type = MIME_TYPES[path.extname(resolved).toLowerCase()] || 'application/octet-stream';
+    ctx.set('Cache-Control', 'no-cache');
+    ctx.body = fs.createReadStream(resolved);
+    ctx.stop();
+    return true;
 }
 
 // ── Body reader ───────────────────────────────────────────────────────────
@@ -426,6 +432,11 @@ function jsonErr(ctx, status, msg) { ctx.status = status; ctx.type = 'applicatio
 // ── Plugin init ───────────────────────────────────────────────────────────
 exports.init = async api => {
 
+    // One-time move of the retired 'basePath' setting into its replacement, so
+    // a URL somebody had configured keeps working as a redirect.
+    const oldBasePath = api.getConfig('basePath')
+    if (oldBasePath && !api.getConfig('pathAlias')) api.setConfig('pathAlias', oldBasePath)
+
     const { getCurrentUsername } = api.require('./auth');
     _spawn = api.require('child_process').spawn;
 
@@ -438,32 +449,48 @@ exports.init = async api => {
         else rawLogger.log(msg);
     }
 
+    function authOpts() {
+        return {
+            allowedUsers: api.getConfig('allowedUsers'),
+            redirectUrl: api.getConfig('redirectUrl'),
+        };
+    }
+
     return { unload() { rawLogger.unload(); }, middleware };
 
     async function middleware(ctx) {
-        const base = (api.getConfig('basePath') || '/~/plugins/hfs-wake-on-lan').replace(/\/+$/, '');
-        const url  = ctx.req.url.split('?')[0];
+        const url = ctx.path;
+        const CANONICAL = shared.canonicalPath(api).slice(0, -1);
 
-        // Old default path (pre-hfs-shared retrofit) redirects to wherever
-        // basePath is currently configured, in case it was never customized.
-        if (base !== OLD_BASE_PATH && (url === OLD_BASE_PATH || url.startsWith(OLD_BASE_PATH + '/')))
-            return shared.response.redirect(ctx, url.replace(OLD_BASE_PATH, base));
+        // Legacy alias, dashboard-URL normalization, auth, and serving the
+        // bundled/custom-frontend index.html at the canonical root are all
+        // handled here -- see hfs-shared's servePublic.
+        if (shared.servePublic(ctx, api, {
+            ...authOpts(),
+            pathAlias: api.getConfig('pathAlias'),
+            useCustomFrontend: api.getConfig('useCustomFrontend'),
+            distDir: __dirname,
+        })) return;
 
-        if (url !== base && !url.startsWith(base + '/')) return;
+        if (url !== CANONICAL && !url.startsWith(CANONICAL + '/')) return;
 
-        // ── Auth ──────────────────────────────────────────────────────────
+        // ── Auth for everything else in this namespace (the API) ──────────
+        const denied = shared.auth.gate(ctx, api, authOpts());
+        if (denied) return;
         const username = getCurrentUsername(ctx);
-        if (!username) return deny(ctx, api, 401, 'Authentication required');
-        const allowed = (api.getConfig('allowedUsers') || []).map(u => u.username).filter(Boolean);
-        if (allowed.length > 0 && !allowed.includes(username)) return deny(ctx, api, 403, 'Access denied');
 
-        const sub = url.slice(base.length);
+        const sub = url.slice(CANONICAL.length);
 
         // ── GET /api/tailwind.js ──────────────────────────────────────────
+        // The shipped dashboard brings its own stylesheet; this stays for a
+        // custom frontend that wants Tailwind, and 404s when the plugin
+        // providing it is not installed.
         if (sub === '/api/tailwind.js') {
+            const tailwind = api.customApiCall('tailwind')[0];
+            if (!tailwind) return jsonErr(ctx, 404, 'Tailwind is not available');
             ctx.type = 'application/javascript';
             ctx.set('Cache-Control', 'public, max-age=86400');
-            ctx.body = fs.createReadStream(api.customApiCall('tailwind')[0].path);
+            ctx.body = fs.createReadStream(tailwind.path);
             ctx.stop();
             return;
         }
@@ -585,29 +612,12 @@ exports.init = async api => {
             }
         }
 
-        // ── Static files ──────────────────────────────────────────────────
-        if (sub === '' || sub === '/') return serveStatic(ctx);
+        if (sub.startsWith('/api/')) return; // unknown API route, not ours to answer
 
-        if (sub.startsWith('/') && !sub.startsWith('/api/')) {
-            const rel        = sub.slice(1);
-            const fromPublic = path.join(__dirname, 'public', rel);
-            const fromRoot   = path.join(__dirname, rel);
-            const filePath   = fs.existsSync(fromPublic) ? fromPublic : fromRoot;
-            return serveStatic(ctx, filePath);
-        }
+        // Any other asset under the folder (the dashboard root itself was
+        // already handled by servePublic above): the override wins where it
+        // has a file; everything else is left to HFS, which serves this
+        // plugin's public folder on its own.
+        if (serveCustomFrontend(ctx, api, sub.replace(/^\/+/, ''))) return;
     }
 };
-
-function deny(ctx, api, status, message) {
-    const redirect = api.getConfig('redirectUrl');
-    if (redirect) {
-        ctx.status = 302;
-        ctx.set('Location', redirect);
-        ctx.body = '';
-    } else {
-        ctx.status = status;
-        ctx.type   = 'application/json';
-        ctx.body   = JSON.stringify({ error: message });
-    }
-    ctx.stop();
-}

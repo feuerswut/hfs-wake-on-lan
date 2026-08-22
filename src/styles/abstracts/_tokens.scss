@@ -1,0 +1,76 @@
+// ---------------------------------------------------------------------------
+// abstracts/_tokens.scss -- every colour and every measure the dashboard
+// paints with, in one place.
+//
+// Custom properties rather than Sass variables: the theme is a class on
+// <body>, so the values have to still be in the cascade at runtime for the
+// switch to reach them. A Sass variable would have been resolved away while
+// this file was compiled and there would be nothing left to swap.
+//
+// Light is the base. Dark arrives two ways -- .theme-dark set explicitly, or
+// the operating system asking for it while nothing overrides that -- and both
+// pull the same block through the mixin below.
+// ---------------------------------------------------------------------------
+
+@mixin dark {
+    --sf-text:         #d7dae0;
+    --sf-text-hi:      #fff;
+    --sf-text-med:     #a8b0ba;
+    --sf-text-less:    #7d858f;
+    --sf-bg:           #181818;
+    --sf-bg-faint:     #262626;
+    --sf-button-text:  #eee;
+    --sf-faint:        #333;
+    --sf-mild:         #6a7078;
+    --sf-ghost:        #ffffff0a;
+    --sf-good:         #9aa4b0;
+    --sf-focus:        #ff8f87;
+    --sf-success:      #57cc7a;
+    --sf-warning:      #e3b341;
+    --sf-error:        #ff7b72;
+    --sf-link:         #ff8f87;
+    --sf-link-hover:   #ffb3ad;
+    --sf-header-bg:    #262626;
+    --sf-input-bg:     #2a2a2a;
+    --sf-input-border: #555;
+}
+
+:root {
+    --sf-text:         #000;
+    --sf-text-hi:      #000;
+    --sf-text-med:     #4a5157;
+    --sf-text-less:    #6b7480;
+    --sf-bg:           #fff;
+    --sf-bg-faint:     #f2f3f5;
+    --sf-button-bg:    #a11;
+    --sf-button-text:  #fff;
+    --sf-faint:        #e6e8eb;
+    --sf-mild:         #c8ccd1;
+    --sf-ghost:        #0000000a;
+    --sf-good:         #616b75;
+    --sf-focus:        #a11;
+    --sf-focus-ring:   #{rgba(#a11, 0.2)};
+    --sf-success:      #1a7f37;
+    --sf-warning:      #8a6100;
+    --sf-error:        #b3261e;
+    --sf-error-bg:     #a3221b;
+    --sf-error-text:   #fff;
+    --sf-link:         #a11;
+    --sf-link-hover:   #6d0d0d;
+    --sf-header-bg:    #fff;
+    --sf-input-bg:     #fff;
+    --sf-input-border: #c8ccd1;
+
+    --sf-header-h: 3.7rem;
+
+    // page measures, kept here so the panels and the header agree
+    --wol-max-width: 56rem;
+    --wol-radius:    0.5rem;
+    --wol-gap:       0.75rem;
+}
+
+body.theme-dark { @include dark; }
+
+@media (prefers-color-scheme: dark) {
+    body:not(.theme-light) { @include dark; }
+}
