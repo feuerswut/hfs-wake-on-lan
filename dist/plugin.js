@@ -6,7 +6,7 @@ exports.description = "Wake-on-LAN dashboard — wake and monitor network device
 exports.apiRequired = 13;
 exports.author = "feuerswut";
 exports.repo = "feuerswut/hfs-wake-on-lan";
-exports.depend = [{ repo: "feuerswut/hfs-shared" }]
+exports.depend = [{ "repo": "feuerswut/hfs-shared", "version": 1 }]
 
 exports.config = {
     pathAlias: {
