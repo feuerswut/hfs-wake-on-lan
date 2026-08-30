@@ -1,12 +1,11 @@
 // HFS Wake-on-LAN Plugin
 // WoL core based on agnat/node_wake_on_lan
 
-exports.version = 2.3;
+exports.version = 2.5;
 exports.description = "Wake-on-LAN dashboard — wake and monitor network devices. Authenticated users only.";
 exports.apiRequired = 13;
 exports.author = "feuerswut";
 exports.repo = "feuerswut/hfs-wake-on-lan";
-exports.depend = [{ "repo": "feuerswut/hfs-shared", "version": 1 }]
 
 exports.config = {
     pathAlias: {
@@ -109,6 +108,8 @@ exports.configDialog = {
 };
 
 exports.changelog = [
+    { version: 2.5, message: "The hfs-shared warning now gives the specific reason and reappears/clears more reliably (fallback poll added). Vendored guard moved to lib/dependency.js." },
+    { version: 2.4, message: "Hard exports.depend on hfs-shared replaced with a self-clearing config warning that hides the rest of the settings while hfs-shared is missing or outdated -- this plugin no longer fails to load entirely when that's the case." },
     { version: 2.3, message: "Serving/auth now via hfs-shared's servePublic." },
 ];
 
@@ -119,6 +120,7 @@ const path   = require('path');
 const fs     = require('fs');
 const crypto = require('crypto');
 const { Buffer } = require('buffer');
+const { awaitHfsShared } = require('./lib/dependency');
 
 const allocBuf = Buffer.alloc
     ? n => Buffer.alloc(n)
@@ -440,9 +442,16 @@ exports.init = async api => {
     const { getCurrentUsername } = api.require('./auth');
     _spawn = api.require('child_process').spawn;
 
-    const shared = api.customApiCall('hfsShared')[0];
-    shared.requireVersion('^1.0.0');
-    const rawLogger = shared.createLogger(api, { tag: 'hfs-wake-on-lan' });
+    let shared = null;
+    let rawLogger = null;
+
+    function startRealPlugin(api, resolvedShared) {
+        shared = resolvedShared;
+        rawLogger = shared.createLogger(api, { tag: 'hfs-wake-on-lan' });
+    }
+
+    awaitHfsShared(api, exports.config, '^1.0.0', s => startRealPlugin(api, s));
+
     function log(msg) {
         if (!api.getConfig('wol_enableLogging')) return;
         if (api.getConfig('wol_verboseLogging')) rawLogger.logNow(msg);
@@ -456,9 +465,11 @@ exports.init = async api => {
         };
     }
 
-    return { unload() { rawLogger.unload(); }, middleware };
+    return { unload() { rawLogger?.unload(); }, middleware };
 
     async function middleware(ctx) {
+        if (!shared) return; // hfs-shared isn't ready yet (or never became available)
+
         const url = ctx.path;
         const CANONICAL = shared.canonicalPath(api).slice(0, -1);
 
