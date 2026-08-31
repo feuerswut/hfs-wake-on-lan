@@ -97,12 +97,21 @@ function makeMockApi(configSchema, storageDir, preset) {
   const store = {};
   for (const [k, desc] of Object.entries(configSchema)) store[k] = desc && 'defaultValue' in desc ? desc.defaultValue : undefined;
   Object.assign(store, preset || {});
+  // Minimal stand-in for HFS's real api.events (an EventEmitter): only what
+  // hfs-shared-guard.js needs -- on() to subscribe, emit() to notify itself
+  // once hfs-shared is found, both no-ops here since this test always has
+  // hfs-shared available synchronously via customApiCall below.
+  const listeners = {};
   return {
     id: PLUGIN_ID,
     storageDir,
     getConfig: k => store[k],
     setConfig: (k, v) => { store[k] = v; },
     log: () => {},
+    events: {
+      on(name, cb) { (listeners[name] || (listeners[name] = [])).push(cb); },
+      emit(name, arg) { for (const cb of listeners[name] || []) cb(arg); },
+    },
     require: mod => {
       if (mod === './auth') return { getCurrentUsername: ctx => (ctx.state && ctx.state.username) || null };
       if (mod === 'child_process') return { spawn: () => new EventEmitter() };
