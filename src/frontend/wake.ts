@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // frontend/wake.ts -- the dashboard's whole client side: load the device
 // list, render it, and wire up add/wake/ping/remove. Compiled by
-// build/build.mjs into dist/public/wake.js, an IIFE loaded from index.html.
+// util/build.mjs into dist/public/wake.js, an IIFE loaded from index.html.
 //
 // No globals for the HTML to call into (unlike the plain-JS page this
 // replaces): index.html carries no onclick attributes, and every control is

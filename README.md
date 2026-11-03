@@ -27,7 +27,7 @@ Upgrading from 1.x: the old **Base Path** setting is gone. Whatever it held is c
 
 ## Building
 
-The dashboard is TypeScript and Sass under `src/`, compiled into `dist/public/` by `build/build.mjs`. `dist/plugin.js` and `dist/backend/` are hand-written and untouched by the build.
+The dashboard is TypeScript and Sass under `src/`, compiled into `dist/public/` by `util/build.mjs`. `dist/plugin.js` and `dist/backend/` are hand-written and untouched by the build.
 
 ```
 npm install
