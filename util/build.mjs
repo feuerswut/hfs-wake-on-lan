@@ -19,9 +19,9 @@
    URL from which those two names resolve one directory too high.
 
    Usage:
-     node build/build.mjs            one-shot build
-     node build/build.mjs --dev      readable output, inline sourcemap
-     node build/build.mjs --watch    build, then rebuild on any src/ change
+     node util/build.mjs             one-shot build
+     node util/build.mjs --dev       readable output, inline sourcemap
+     node util/build.mjs --watch     build, then rebuild on any src/ change
    --------------------------------------------------------------------------- */
 
 import { cpSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -41,7 +41,7 @@ const PUBLIC = join(ROOT, 'dist', 'public')
 const watch = process.argv.includes('--watch')
 const dev = watch || process.argv.includes('--dev')
 
-const BANNER = '/* Built from src/ by build/build.mjs -- do not edit. */\n'
+const BANNER = '/* Built from src/ by util/build.mjs -- do not edit. */\n'
 
 function kb(path) {
     return `${(statSync(path).size / 1024).toFixed(1)} kB`
